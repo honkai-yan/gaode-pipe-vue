@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref } from "vue";
 import { useAppStatStore } from "@/store/appState";
 import { storeToRefs } from "pinia";
 import { appRuntime } from "@/runtime/appRuntime";
+import { ElMessage, ElLoading } from "element-plus";
 
 const appStatStore = useAppStatStore();
 const { appStat } = storeToRefs(appStatStore);
@@ -23,6 +24,12 @@ const drawLinePreviewLineStyle = {
 const emit = defineEmits(["mapLoaded"]);
 
 onMounted(() => {
+  const loading = ElLoading.service({
+    lock: true,
+    text: "地图加载中",
+    background: "rgba(0, 0, 0, 0.7)",
+  });
+
   AMapLoader.load({
     key: "bf16eadc6638cfe35225ad5907a424fb",
     version: "2.0",
@@ -46,10 +53,12 @@ onMounted(() => {
       console.log("地图加载成功");
       // console.log(appStat.value.mapInstanceLoadStat);
       appStat.value.mapInstanceLoadStat = "done";
+      loading.close();
       emit("mapLoaded");
     })
     .catch((e) => {
       console.error("地图加载失败：", e);
+      ElMessage.error("地图加载失败！");
       appStat.value.mapInstanceLoadStat = "err";
     });
 });
