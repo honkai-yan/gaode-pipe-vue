@@ -39,7 +39,7 @@ export function SameLnglat(lnglat1, lnglat2) {
 }
 
 /**
- * 计算两个像素坐标之间的距离
+ * 计算两个像素坐标之间的距离，坐标格式为[x, y]或{x, y}
  * @param {Array | Object} pos1 像素位置1
  * @param {Array | Object} pos2 像素位置2
  * @returns 两个像素坐标之间的直线距离
@@ -61,7 +61,7 @@ export function pixelPosDistance(pos1, pos2) {
  * @param {Array} lines 每条线段的两个端点组成的数组，每个端点是经纬度坐标数组，示例：[[[100,104], [102,100]], [[102,100], [99,108]]]
  */
 export function collectEndpoints(lines) {
-  // 扁平化数组并去重，将所有重复端点全部删除
+  // 扁平化数组并去重，然后删除所有重复端点
   const flatted = [];
   lines.forEach((val) => {
     flatted.push(val[0]);

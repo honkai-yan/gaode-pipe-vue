@@ -13,6 +13,7 @@ import {
 } from "./utils";
 import SegmentContextMenu from "./components/SegmentContextMenu.vue";
 import SegmentDataPopup from "./components/SegmentDataPopup.vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 
 const appStatStore = useAppStatStore();
 const { appStat } = storeToRefs(appStatStore);
@@ -37,12 +38,20 @@ const editExtMenuPos = ref({
   x: 0,
   y: 0,
 });
+// 临时保存线段的自定义数据
+const customLineData = ref([]);
 
+/**
+ * 处理鼠标在地图元素上移动的事件
+ */
 function handleMouseMoveOnMap(e) {
   currentMousePosLnglat = e.lnglat;
   // console.log(currentMousePosLnglat);
 }
 
+/**
+ * 每帧尝试绘制预览线
+ */
 function drawPreviewLine() {
   if (appStat.value.drawLineMode && drawLineStartPos) {
     const previewPolyline = appRuntime.drawLinePreviewLine;
@@ -85,9 +94,11 @@ onUnmounted(() => {
   document.removeEventListener("keyup", handleKeyUp);
 });
 
+/**
+ * 地图准备好后注册必要的事件并初始化一些全局地图元素
+ */
 function onMapReady() {
   console.log(appStat.value.mapInstanceLoadStat);
-  // 注册必要的事件
   if (appStat.value.mapInstanceLoadStat === "done") {
     appRuntime.mapInstance?.on("mousemove", handleMouseMoveOnMap);
     console.log("事件注册完成");
@@ -98,16 +109,27 @@ function onMapReady() {
   requestAnimationFrame(drawPreviewLine);
 }
 
+/**
+ * 右键线段打开菜单，并将目标线段设置为活跃线段
+ */
 function handleRightClickPolyline(e) {
   const pixel = e.pixel;
   editExtMenuPos.value = {
     x: pixel.x,
     y: pixel.y,
   };
+  appRuntime.activePolyline = e.target;
+  customLineData.value = appRuntime.activePolyline.getExtData();
+  if (!Array.isArray(customLineData.value)) {
+    customLineData.value = [];
+  }
   contextMenuVisible.value = true;
 }
 
-function handleClickMapInDrawLineMode(e) {
+/**
+ * 处理点击地图的事件
+ */
+function handleClickMap(e) {
   // 经纬坐标
   const lnglat = e.lnglat;
   // 像素坐标
@@ -136,7 +158,7 @@ function handleClickMapInDrawLineMode(e) {
           return true;
         })
         .map((polyline) => {
-          // getPath()返回一个二维数组，代表该polyline对象的所有线段的坐标集合。
+          // polyline.getPath()返回一个二维数组，代表该polyline对象的所有线段的坐标集合。
           const [path] = polyline.getPath();
           return [
             [path[0].lng, path[0].lat],
@@ -149,7 +171,7 @@ function handleClickMapInDrawLineMode(e) {
       // console.log(endpoints);
 
       // 在这些端点中寻找距离光标位置16px以内且最近的端点
-      const closestEndpoint = endpoints
+      const closestEndpoints = endpoints
         .map((elm) => {
           return lnglat2contaner(elm);
         })
@@ -162,8 +184,8 @@ function handleClickMapInDrawLineMode(e) {
 
       // console.log("endpoints:", endpoints);
       // console.log("closestEndpoint:", closestEndpoint[0]);
-      if (closestEndpoint.length > 0) {
-        drawLineStartPos = container2lnglat(closestEndpoint[0]);
+      if (closestEndpoints.length > 0) {
+        drawLineStartPos = container2lnglat(closestEndpoints[0]);
         // console.log("吸附到端点：", drawLineStartPos);
       }
     }
@@ -171,31 +193,52 @@ function handleClickMapInDrawLineMode(e) {
   }
 
   drawLineEndPos = lnglat;
-  // 绘制一条线段
+  // 创建一条线段
   const polyline = new AMap.Polyline({
     ...defaultLineStyle,
     path: [[drawLineStartPos, drawLineEndPos]],
   });
 
-  // 右键菜单
+  // 绑定右键菜单
   polyline.on("rightclick", handleRightClickPolyline);
-
+  // 绘制线段
   appRuntime.mapInstance.add(polyline);
 
   // 更新起始点到上一个结束点
   drawLineStartPos = drawLineEndPos;
 }
 
+/**
+ * 打开/关闭绘制线段模式
+ */
 function toggleDrawLineMode() {
   appStat.value.drawLineMode = !appStat.value.drawLineMode;
   if (appStat.value.drawLineMode) {
-    appRuntime.mapInstance.on("click", handleClickMapInDrawLineMode);
+    appRuntime.mapInstance.on("click", handleClickMap);
   } else {
     appRuntime.drawLinePreviewLine.hide();
     drawLineStartPos = null;
     drawLineEndPos = null;
-    appRuntime.mapInstance.off("click", handleClickMapInDrawLineMode);
+    appRuntime.mapInstance.off("click", handleClickMap);
   }
+}
+
+/**
+ * 处理删除线段
+ */
+function handleDeleteLine() {
+  ElMessageBox.confirm("确定删除此线段吗？").then(() => {
+    appRuntime.mapInstance.remove(appRuntime.activePolyline);
+    ElMessage.success("删除成功");
+  });
+}
+
+/**
+ * 处理保存线段的自定义数据
+ */
+function handleSaveCustomData(data) {
+  if (!appRuntime.activePolyline) return;
+  appRuntime.activePolyline.setExtData(data);
 }
 </script>
 
@@ -209,13 +252,15 @@ function toggleDrawLineMode() {
   <SegmentContextMenu
     v-model:visible="contextMenuVisible"
     :position="editExtMenuPos"
-    @edit=""
-    @delete=""
+    @edit="() => (dataPopupVisible = true)"
+    @delete="handleDeleteLine"
   ></SegmentContextMenu>
 
   <SegmentDataPopup
     v-model:visible="dataPopupVisible"
     :position="editExtMenuPos"
+    :customData="customLineData"
+    @save="handleSaveCustomData"
   ></SegmentDataPopup>
 </template>
 
