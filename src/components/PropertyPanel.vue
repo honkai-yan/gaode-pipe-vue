@@ -1,13 +1,22 @@
 <script setup>
 import { ElMessageBox } from "element-plus";
 
+/**
+{
+  type: string,
+  extData: {
+    key: string,
+    val: string,
+  }[],
+}
+ */
 const props = defineProps({
   data: {
     type: Object,
   },
 });
 
-const emits = defineEmits(["onDeleteObj"]);
+const emits = defineEmits(["deleteObj"]);
 
 function handleAddData() {
   // console.log(props.data);
@@ -28,7 +37,7 @@ async function handleDeleteObj() {
       confirmButtonText: "确定",
       cancelButtonText: "取消",
     });
-    emits("onDeleteObj");
+    emits("deleteObj");
   } catch (_) {
     // 忽略操作
   }
@@ -40,8 +49,12 @@ async function handleDeleteObj() {
     <div class="choose-tip" v-if="props.data === null">请选择一个对象</div>
 
     <div class="property-panel" v-if="props.data !== null">
+      <p style="font-weight: bold">对象类型：{{ props.data.type }}</p>
+
       <!-- 删除按钮 -->
-      <el-button type="danger" @click="handleDeleteObj">删除对象</el-button>
+      <el-button style="margin-top: 8px" type="danger" @click="handleDeleteObj"
+        >删除对象</el-button
+      >
 
       <!-- 自定义数据 -->
       <div class="custom-data">
@@ -66,10 +79,7 @@ async function handleDeleteObj() {
             <span>-</span>
             <!-- 值 -->
             <el-input v-model="row.value"></el-input>
-            <el-button
-              link
-              type="danger"
-              @click="() => handleDeleteData(idx)"
+            <el-button link type="danger" @click="() => handleDeleteData(idx)"
               >×</el-button
             >
           </li>
@@ -87,7 +97,7 @@ async function handleDeleteObj() {
   height: 100%;
   right: 0;
   top: 0;
-  background-color: rgba(255, 255, 255, 0.95);
+  background-color: rgba(255, 255, 255, 0.9);
 }
 
 .choose-tip {

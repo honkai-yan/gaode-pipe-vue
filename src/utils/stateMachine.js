@@ -62,19 +62,20 @@ export class StateMachine {
       );
     }
   }
-  
+
   /**
    * 切换状态机的状态
    * @param {any} stateName 要切换到的状态
    * @param {any} data 传递给新状态的上下文
    * @param {boolean} checkSameState 检查目标状态与当前状态是否一致，如果为false，则即使新状态等于当前状态也会进行切换
-   * @returns 
+   * @returns
    */
-  changeCurrentState(stateName, data, checkSameState) {
-    // console.log("change to:", stateName);
-    if (checkSameState && this.currentState === stateName) {
+  changeCurrentState(stateName, data, checkSameState = true) {
+    if (checkSameState && this.currentState.value === stateName) {
       return;
     }
+
+    // console.log("change to:", stateName);
 
     this._checkState(stateName);
 

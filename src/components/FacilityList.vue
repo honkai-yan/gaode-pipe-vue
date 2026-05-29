@@ -1,61 +1,44 @@
 <script setup>
-import { ref } from "vue";
-import { DRAW_FACILITY_MODE } from "@/constants/drawModeStates";
 import { facilityList } from "@/data/facilityList";
-import { appRuntime } from "@/runtime/appRuntime";
+import { useAppStatStore } from "@/store/appState";
+import { storeToRefs } from "pinia";
+import { computed } from "vue";
+
+const { appStat } = storeToRefs(useAppStatStore());
 
 const props = defineProps({
-  active: {
-    type: Boolean,
-    required: true,
-  },
   currentSelectedId: {
     type: Number,
     required: true,
   },
 });
 
-const continuously = ref(false);
+const facilityItem = computed(() => {
+  return (
+    facilityList.find((val) => val.id === props.currentSelectedId) || {
+      text: "",
+    }
+  );
+});
 
-if (props.currentSelectedId === -1) {
-  continuously.value = false;
-}
+const emit = defineEmits(["selectedIdChanged"]);
 
-const emit = defineEmits(["update:currentSelectedId"]);
-
-function isInContinuousDrawMode() {
-  return props.active && continuously.value;
-}
-
-/**
- * 单击进入添加设施模式
- */
 function handleClickFacility(id) {
   // 重复点击相同元素将不生效
-  if (id === props.currentSelectedId) return;
-
-  appRuntime.drawModeSM.changeCurrentState(DRAW_FACILITY_MODE);
-  emit("update:currentSelectedId", id);
-  continuously.value = false;
-  appRuntime.drawModeSM.setCustomContext({
-    continuously: false,
-  });
+  if (id === props.currentSelectedId) {
+    return;
+  }
+  // 告知父组件id发生变化，参数2为false表示id变化由鼠标单击造成，
+  // 否则为双击造成，用于告知父组件是否需要进入连续添加模式
+  emit("selectedIdChanged", id, false);
 }
 
-/**
- * 双击进入连续添加设施模式，连续添加模式会给状态机上下文设置continuous属性
- * 来表示可以连续操作
- */
 function handleDbClickFacility(id) {
   // 重复点击相同元素且已经处于连续模式将不生效
-  if (id === props.currentSelectedId && isInContinuousDrawMode()) return;
-
-  appRuntime.drawModeSM.changeCurrentState(DRAW_FACILITY_MODE);
-  emit("update:currentSelectedId", id);
-  continuously.value = true;
-  appRuntime.drawModeSM.setCustomContext({
-    continuously: true,
-  });
+  if (id === props.currentSelectedId && appStat.value.addFacilityContinuously) {
+    return;
+  }
+  emit("selectedIdChanged", id, true);
 }
 </script>
 
@@ -70,27 +53,31 @@ function handleDbClickFacility(id) {
             'facility-item': true,
             active: props.currentSelectedId === facility.id,
             'active-ex':
-              props.currentSelectedId === facility.id && continuously,
+              props.currentSelectedId === facility.id &&
+              appStat.addFacilityContinuously,
           }"
           :title="facility.text"
           @click="() => handleClickFacility(facility.id)"
           @dblclick="() => handleDbClickFacility(facility.id)"
         >
-          <img
-            class="facility-img"
-            :src="facility.iconSrc"
-            :alt="facility.text"
-            :key="facility.id"
-          />
+          <div class="icon-wrapper">
+            <img
+              :src="facility.iconSrc"
+              :alt="facility.text"
+              :key="facility.id"
+            />
+          </div>
+          <span>{{ facility.text }}</span>
         </div>
       </div>
     </el-card>
     <el-tag
       class="mode-instruct"
-      v-if="props.active"
-      :type="continuously ? 'warning' : 'primary'"
+      v-if="props.currentSelectedId !== -1"
+      :type="appStat.addFacilityContinuously ? 'warning' : 'primary'"
     >
-      {{ continuously ? "连续添加设施" : "添加设施" }}
+      {{ appStat.addFacilityContinuously ? "连续添加: " : "添加: " }}
+      {{ facilityItem.text }}
     </el-tag>
   </div>
 </template>
@@ -113,6 +100,11 @@ function handleDbClickFacility(id) {
   background-color: rgba(255, 255, 255, 0.9);
   display: flex;
   flex-direction: column;
+  anchor-name: --facility-list-wrapper;
+}
+
+.facility-list:deep(.el-card__body) {
+  padding: 12px;
 }
 
 .facility-list .title {
@@ -123,44 +115,77 @@ function handleDbClickFacility(id) {
   margin-top: 8px;
   width: fit-content;
   display: grid;
-  grid-template-columns: repeat(2, 60px);
+  grid-template-columns: repeat(3, 70px);
+  grid-template-rows: 70px;
+  grid-auto-rows: 70px;
   gap: 8px;
 }
 
-.facility-list:deep(.el-card__body) {
-  padding: 12px !important;
-}
-
 .facility-item {
-  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   border-radius: 8px;
-  padding: 8px;
-  background-color: rgb(235, 235, 235);
+  /* padding: 8px; */
+  background-color: rgba(243, 243, 243, 0.7);
+  cursor: pointer;
+}
+.facility-item:hover {
+  background-color: rgb(230, 230, 230);
 }
 .facility-item.active {
   color: white;
-  background-color: rgb(145, 180, 255);
+  background-color: rgb(179, 203, 255);
 }
 .facility-item.active-ex {
-  color: white;
+  color: inherit;
   background-color: rgb(255, 225, 176);
+}
+
+.facility-item .icon-wrapper {
+  height: 50px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px;
 }
 
 .facility-item img {
   width: 100%;
-  aspect-ratio: 1/1;
-  object-fit: cover;
+  height: 100%;
+  object-fit: contain;
   -webkit-user-drag: none;
   user-select: none;
 }
 
-.facility-item p {
+.facility-item span {
+  width: 100%;
+  min-height: 10px;
+  height: 10px;
+  font-size: 10px;
+  line-height: 10px;
+
+  padding: 0 4px;
+
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 10px;
+}
+
+.mode-instruct {
+  max-width: 160px;
+
+  position: absolute;
+  position-anchor: --facility-list-wrapper;
+
+  left: anchor(right);
+  top: anchor(top);
+}
+
+.mode-instruct:deep(span) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

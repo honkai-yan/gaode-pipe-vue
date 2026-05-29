@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import GaoDeMap from "./components/GaoDeMap.vue";
 import { useAppStatStore } from "./store/appState";
 import { storeToRefs } from "pinia";
@@ -10,7 +10,7 @@ import {
   lnglat2contaner,
   pixelPosDistance,
 } from "./utils";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import PropertyPanel from "./components/PropertyPanel.vue";
 import FacilityList from "./components/FacilityList.vue";
 import {
@@ -79,7 +79,7 @@ function handleKeyPressed(e) {
   keysPressed[key] = true;
   if (keysPressed["Escape"]) {
     if (drawMode.value === DRAW_POLYLINE_MODE) {
-      toggleDrawLineMode();
+      appRuntime.drawModeSM.changeCurrentState(DRAW_IDEL_MODE);
     } else if (drawMode.value === DRAW_FACILITY_MODE) {
       appRuntime.drawModeSM.changeCurrentState(DRAW_IDEL_MODE);
     } else if (drawMode.value === EDIT_EXT_DATA_MODE) {
@@ -122,6 +122,56 @@ onUnmounted(() => {
 });
 
 /**
+ * 开启地图上所有元素的鼠标穿透，包括管道和设施
+ */
+function openClickThrough() {
+  const polylines = appRuntime.mapInstance.getAllOverlays("polyline");
+  if (polylines.length > 0) {
+    for (const polyline of polylines) {
+      polyline.setOptions({
+        ...polyline.getOptions(),
+        bubble: true,
+      });
+    }
+  }
+
+  const markers = appRuntime.mapInstance.getAllOverlays("marker");
+  if (markers.length > 0) {
+    for (const marker of markers) {
+      marker.setOptions({
+        ...marker.getOptions(),
+        bubble: true,
+      });
+    }
+  }
+}
+
+/**
+ * 还原地图上所有元素的鼠标穿透
+ */
+function restoreClickThrough() {
+  const polylines = appRuntime.mapInstance.getAllOverlays("polyline");
+  if (polylines.length > 0) {
+    for (const polyline of polylines) {
+      polyline.setOptions({
+        ...polyline.getOptions(),
+        bubble: false,
+      });
+    }
+  }
+
+  const markers = appRuntime.mapInstance.getAllOverlays("marker");
+  if (markers.length > 0) {
+    for (const marker of markers) {
+      marker.setOptions({
+        ...marker.getOptions(),
+        bubble: false,
+      });
+    }
+  }
+}
+
+/**
  * 地图准备好后注册必要的事件并初始化一些全局地图元素
  */
 function onMapReady() {
@@ -142,35 +192,47 @@ function onMapReady() {
     .addState(
       DRAW_POLYLINE_MODE,
       () => {
+        console.log("Enter draw line mode");
         appRuntime.mapInstance.on("click", handleDrawPolyline);
+        openClickThrough();
+        ElMessage.success("绘制管道： 开");
       },
       null,
       () => {
+        console.log("Quit draw line mode");
+        currentSelectedFacilityId.value = -1;
         appRuntime.drawLinePreviewLine.hide();
         drawLineStartPos = null;
         drawLineEndPos = null;
         appRuntime.mapInstance.off("click", handleDrawPolyline);
+        appStat.value.addFacilityContinuously = false;
+        restoreClickThrough();
+        ElMessage.warning("绘制管道：关");
       },
     )
     // 绘制设施模式
     .addState(
       DRAW_FACILITY_MODE,
       () => {
+        console.log("Enter draw facility mode");
         appRuntime.mapInstance.on("click", handleDrawFacility);
+        openClickThrough();
       },
       null,
       () => {
+        console.log("Quit draw facility mode");
         currentSelectedFacilityId.value = -1;
         appRuntime.mapInstance.off("click", handleDrawFacility);
-        appRuntime.drawModeSM.setCustomContext({
-          continuously: undefined,
-        });
+        appStat.value.addFacilityContinuously = false;
+        restoreClickThrough();
       },
     )
     // 编辑数据模式
     .addState(
       EDIT_EXT_DATA_MODE,
       (_prevState, _ctx, target) => {
+        console.log("Enter edit mode");
+
         currentSelectObj = target;
         // console.debug(currentSelectObj);
 
@@ -182,21 +244,17 @@ function onMapReady() {
           content.style.filter = "drop-shadow(0 0 5px rgba(0, 0, 0, .6))";
         }
 
-        const data = currentSelectObj.getExtData();
-        if (!data.extData || !Array.isArray(data.extData)) {
-          data.extData = [];
-        }
-        currentObjData.value = data;
+        currentObjData.value = currentSelectObj.getExtData();
       },
       (_prevState, target) => {
+        console.log("Run edit mode");
+
         currentSelectObj = target;
-        const data = currentSelectObj.getExtData();
-        if (!data.extData || !Array.isArray(data.extData)) {
-          data.extData = [];
-        }
-        currentObjData.value = data;
+        currentObjData.value = currentSelectObj.getExtData();
       },
       () => {
+        console.log("Quit edit mode");
+
         // 恢复对象样式
         if (currentSelectObj.className === "Overlay.Polyline") {
           currentSelectObj.setOptions({
@@ -247,7 +305,6 @@ function updateCurrentPolylineStyle() {
     });
   }
   if (!currentSelectObj) {
-
     console.debug("currentSelectObj为空");
     return;
   }
@@ -342,24 +399,17 @@ function handleDrawPolyline(e) {
   polyline.on("mouseover", handleMouseHoverPolyline);
   polyline.on("mouseout", handleMouseLeavePolyline);
   polyline.on("click", handleClickPolyline);
+
+  polyline.setExtData({
+    type: "管道",
+    extData: [],
+  });
+
   // 绘制线段
   appRuntime.mapInstance.add(polyline);
 
   // 更新起始点到上一个结束点
   drawLineStartPos = drawLineEndPos;
-}
-
-/**
- * 打开/关闭绘制线段模式
- */
-function toggleDrawLineMode() {
-  if (drawMode.value === DRAW_POLYLINE_MODE) {
-    appRuntime.drawModeSM.changeCurrentState(DRAW_IDEL_MODE);
-    ElMessage.warning("绘制管道：关");
-  } else {
-    appRuntime.drawModeSM.changeCurrentState(DRAW_POLYLINE_MODE);
-    ElMessage.success("绘制管道： 开");
-  }
 }
 
 function handleClickFacility(e) {
@@ -403,7 +453,10 @@ function handleDrawFacility(e) {
   const marker = new AMap.Marker({
     position: lnglat,
     content: img,
-    extData: facility,
+    extData: {
+      ...facility,
+      extData: [],
+    },
     title: facility.text,
     anchor: "center",
   });
@@ -415,28 +468,54 @@ function handleDrawFacility(e) {
     appRuntime.drawModeSM.changeCurrentState(DRAW_IDEL_MODE);
   }
 }
+
+/**
+ * 处理当前选择的设施发生变化的事件
+ */
+function handleSelectedFacilityIdChanged(newId, doubleClicked) {
+  if (newId < 1) {
+    return;
+  }
+  // console.log(newId, doubleClicked);
+
+  // id为1的是管道
+  if (newId === 1) {
+    if (!doubleClicked) {
+      appRuntime.drawModeSM.changeCurrentState(DRAW_POLYLINE_MODE);
+    }
+  } else {
+    if (doubleClicked) {
+      appStat.value.addFacilityContinuously = true;
+    } else {
+      appStat.value.addFacilityContinuously = false;
+    }
+    appRuntime.drawModeSM.changeCurrentState(DRAW_FACILITY_MODE, null);
+  }
+  currentSelectedFacilityId.value = newId;
+}
+
+function handleDeleteObj() {
+  if (!currentSelectObj) {
+    return;
+  }
+  appRuntime.mapInstance.remove(currentSelectObj);
+  currentObjData.value = null;
+}
 </script>
 
 <template>
   <GaoDeMap @mapLoaded="onMapReady"></GaoDeMap>
 
   <FacilityList
-    :active="drawMode === DRAW_FACILITY_MODE"
-    v-model:currentSelectedId="currentSelectedFacilityId"
+    :currentSelectedId="currentSelectedFacilityId"
+    v-on:selectedIdChanged="handleSelectedFacilityIdChanged"
   ></FacilityList>
 
-  <PropertyPanel class="property-panel" :data="currentObjData"></PropertyPanel>
-
-  <el-button
-    type="primary"
-    :class="{
-      'draw-polyline-btn': true,
-      active: drawMode === DRAW_POLYLINE_MODE,
-    }"
-    @click="toggleDrawLineMode"
-  >
-    {{ drawMode === DRAW_POLYLINE_MODE ? "绘制管道(开)" : "绘制管道(关)" }}
-  </el-button>
+  <PropertyPanel
+    class="property-panel"
+    :data="currentObjData"
+    v-on:deleteObj="handleDeleteObj"
+  ></PropertyPanel>
 </template>
 
 <style scoped>
