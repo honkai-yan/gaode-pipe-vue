@@ -2,7 +2,6 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import GaoDeMap from "./components/GaoDeMap.vue";
 import { useAppStatStore } from "./store/appState";
-import BaseButton from "./components/BaseButton.vue";
 import { storeToRefs } from "pinia";
 import { appRuntime } from "./runtime/appRuntime";
 import {
@@ -11,12 +10,20 @@ import {
   lnglat2contaner,
   pixelPosDistance,
 } from "./utils";
-import SegmentContextMenu from "./components/SegmentContextMenu.vue";
-import SegmentDataPopup from "./components/SegmentDataPopup.vue";
 import { ElMessage, ElMessageBox } from "element-plus";
+import PropertyPanel from "./components/PropertyPanel.vue";
+import FacilityList from "./components/FacilityList.vue";
+import {
+  DRAW_FACILITY_MODE,
+  DRAW_IDEL_MODE,
+  DRAW_POLYLINE_MODE,
+  EDIT_EXT_DATA_MODE,
+} from "./constants/drawModeStates";
+import { facilityList } from "./data/facilityList";
 
 const appStatStore = useAppStatStore();
 const { appStat } = storeToRefs(appStatStore);
+let drawMode = appRuntime.drawModeSM.getStateRef();
 
 let drawLineStartPos = null;
 let drawLineEndPos = null;
@@ -26,50 +33,59 @@ const defaultLineStyle = {
   borderWeight: 3,
   strokeColor: "#3366FF",
   strokeOpacity: 1,
-  strokeWeight: 6,
+  strokeWeight: 3,
   strokeStyle: "solid",
   lineJoin: "round",
   lineCap: "round",
   zIndex: 50,
 };
-const contextMenuVisible = ref(false);
-const dataPopupVisible = ref(false);
-const editExtMenuPos = ref({
-  x: 0,
-  y: 0,
-});
 // 临时保存线段的自定义数据
-const customLineData = ref([]);
+// const customLineData = ref([]);
+// 当前按下的按
+const keysPressed = {};
+// 当前选中的设施的id
+const currentSelectedFacilityId = ref(-1);
+// 当前选中的对象的数据
+const currentObjData = ref(null);
+// 当前选中的对象
+let currentSelectObj = null;
 
 /**
  * 处理鼠标在地图元素上移动的事件
  */
 function handleMouseMoveOnMap(e) {
   currentMousePosLnglat = e.lnglat;
-  // console.log(currentMousePosLnglat);
+  // console.debug(currentMousePosLnglat);
 }
 
 /**
  * 每帧尝试绘制预览线
  */
 function drawPreviewLine() {
-  if (appStat.value.drawLineMode && drawLineStartPos) {
+  if (drawMode.value === DRAW_POLYLINE_MODE && drawLineStartPos) {
     const previewPolyline = appRuntime.drawLinePreviewLine;
-    // console.log(previewPolyline);
+    // console.debug(previewPolyline);
     previewPolyline.setPath([[drawLineStartPos, currentMousePosLnglat]]);
     previewPolyline.show();
   }
   requestAnimationFrame(drawPreviewLine);
 }
 
+// 处理键盘事件
 function handleKeyPressed(e) {
-  // console.log(e.key);
+  // console.debug(e.key);
+  // console.debug(e.code);
   const key = e.key;
-  if (key === "Escape") {
-    if (appStat.value.drawLineMode) {
+  keysPressed[key] = true;
+  if (keysPressed["Escape"]) {
+    if (drawMode.value === DRAW_POLYLINE_MODE) {
       toggleDrawLineMode();
+    } else if (drawMode.value === DRAW_FACILITY_MODE) {
+      appRuntime.drawModeSM.changeCurrentState(DRAW_IDEL_MODE);
+    } else if (drawMode.value === EDIT_EXT_DATA_MODE) {
+      appRuntime.drawModeSM.changeCurrentState(DRAW_IDEL_MODE);
     }
-  } else if (key === "Alt") {
+  } else if (keysPressed["Alt"]) {
     appRuntime.altPressing = true;
   }
 }
@@ -78,6 +94,16 @@ function handleKeyUp(e) {
   const key = e.key;
   if (key === "Alt") {
     appRuntime.altPressing = false;
+  }
+  keysPressed[key] = false;
+}
+
+/**
+ * 处理点击地图组件
+ */
+function handleClickMap(e) {
+  if (drawMode.value === EDIT_EXT_DATA_MODE) {
+    appRuntime.drawModeSM.changeCurrentState(DRAW_IDEL_MODE);
   }
 }
 
@@ -89,6 +115,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (appStat.value.mapInstanceLoadStat === "done") {
     appRuntime.mapInstance?.off("mousemove", handleMouseMoveOnMap);
+    appRuntime.mapInstance?.off("click", handleClickMap);
   }
   document.removeEventListener("keydown", handleKeyPressed);
   document.removeEventListener("keyup", handleKeyUp);
@@ -98,45 +125,156 @@ onUnmounted(() => {
  * 地图准备好后注册必要的事件并初始化一些全局地图元素
  */
 function onMapReady() {
-  console.log(appStat.value.mapInstanceLoadStat);
+  console.debug(appStat.value.mapInstanceLoadStat);
   if (appStat.value.mapInstanceLoadStat === "done") {
     appRuntime.mapInstance?.on("mousemove", handleMouseMoveOnMap);
-    console.log("事件注册完成");
+    appRuntime.mapInstance?.on("click", handleClickMap);
+    console.debug("事件注册完成");
   } else {
     console.error("事件注册失败");
   }
-  // 启动预览线绘制
+
+  // 配置状态机
+  appRuntime.drawModeSM
+    // 空闲模式
+    .addState(DRAW_IDEL_MODE)
+    // 绘制线段模式
+    .addState(
+      DRAW_POLYLINE_MODE,
+      () => {
+        appRuntime.mapInstance.on("click", handleDrawPolyline);
+      },
+      null,
+      () => {
+        appRuntime.drawLinePreviewLine.hide();
+        drawLineStartPos = null;
+        drawLineEndPos = null;
+        appRuntime.mapInstance.off("click", handleDrawPolyline);
+      },
+    )
+    // 绘制设施模式
+    .addState(
+      DRAW_FACILITY_MODE,
+      () => {
+        appRuntime.mapInstance.on("click", handleDrawFacility);
+      },
+      null,
+      () => {
+        currentSelectedFacilityId.value = -1;
+        appRuntime.mapInstance.off("click", handleDrawFacility);
+        appRuntime.drawModeSM.setCustomContext({
+          continuously: undefined,
+        });
+      },
+    )
+    // 编辑数据模式
+    .addState(
+      EDIT_EXT_DATA_MODE,
+      (_prevState, _ctx, target) => {
+        currentSelectObj = target;
+        // console.debug(currentSelectObj);
+
+        if (currentSelectObj.className === "Overlay.Polyline") {
+          updateCurrentPolylineStyle();
+        } else if (currentSelectObj.className === "AMap.Marker") {
+          const content = currentSelectObj.getContent();
+          // console.debug(content);
+          content.style.filter = "drop-shadow(0 0 5px rgba(0, 0, 0, .6))";
+        }
+
+        const data = currentSelectObj.getExtData();
+        if (!data.extData || !Array.isArray(data.extData)) {
+          data.extData = [];
+        }
+        currentObjData.value = data;
+      },
+      (_prevState, target) => {
+        currentSelectObj = target;
+        const data = currentSelectObj.getExtData();
+        if (!data.extData || !Array.isArray(data.extData)) {
+          data.extData = [];
+        }
+        currentObjData.value = data;
+      },
+      () => {
+        // 恢复对象样式
+        if (currentSelectObj.className === "Overlay.Polyline") {
+          currentSelectObj.setOptions({
+            ...currentSelectObj.getOptions(),
+            strokeColor: defaultLineStyle.strokeColor,
+          });
+        } else if (currentSelectObj.className === "AMap.Marker") {
+          currentSelectObj.getContent().style.filter = "";
+        }
+        currentSelectObj.setExtData(currentObjData.value);
+        currentObjData.value = null;
+        currentSelectObj = null;
+      },
+    );
+
+  // 开始绘制预览线段
   requestAnimationFrame(drawPreviewLine);
 }
 
-/**
- * 右键线段打开菜单，并将目标线段设置为活跃线段
- */
-function handleRightClickPolyline(e) {
-  const pixel = e.pixel;
-  editExtMenuPos.value = {
-    x: pixel.x,
-    y: pixel.y,
-  };
-  appRuntime.activePolyline = e.target;
-  customLineData.value = appRuntime.activePolyline.getExtData();
-  if (!Array.isArray(customLineData.value)) {
-    customLineData.value = [];
+function handleMouseHoverPolyline(e) {
+  if (drawMode.value === DRAW_FACILITY_MODE) return;
+  if (e.target === currentSelectObj) return;
+  const opt = e.target.getOptions();
+  e.target.setOptions({
+    ...opt,
+    strokeColor: "orange",
+  });
+}
+
+function handleMouseLeavePolyline(e) {
+  if (drawMode.value === DRAW_FACILITY_MODE) return;
+  if (e.target === currentSelectObj) return;
+  const opt = e.target.getOptions();
+  e.target.setOptions({
+    ...opt,
+    strokeColor: defaultLineStyle.strokeColor,
+  });
+}
+
+function updateCurrentPolylineStyle() {
+  // 将所有线段的颜色改为默认值，然后修改当前线段的颜色。
+  const polylines = appRuntime.mapInstance.getAllOverlays("polyline");
+  for (const polyline of polylines) {
+    const opt = polyline.getOptions();
+    polyline.setOptions({
+      ...opt,
+      strokeColor: defaultLineStyle.strokeColor,
+    });
   }
-  contextMenuVisible.value = true;
+  if (!currentSelectObj) {
+
+    console.debug("currentSelectObj为空");
+    return;
+  }
+
+  const opt = currentSelectObj.getOptions();
+  currentSelectObj.setOptions({
+    ...opt,
+    strokeColor: "purple",
+  });
+}
+
+function handleClickPolyline(e) {
+  if (drawMode.value === DRAW_FACILITY_MODE) return;
+  appRuntime.drawModeSM.changeCurrentState(EDIT_EXT_DATA_MODE, e.target, false);
 }
 
 /**
- * 处理点击地图的事件
+ * 处理绘制线段的事件
  */
-function handleClickMap(e) {
+function handleDrawPolyline(e) {
   // 经纬坐标
   const lnglat = e.lnglat;
   // 像素坐标
   const pixel = e.pixel;
 
-  // console.log("经纬坐标：", lnglat);
-  // console.log("像素坐标：", pixel);
+  // console.debug("经纬坐标：", lnglat);
+  // console.debug("像素坐标：", pixel);
 
   // 尝试绘制线段。
   // 如果没有起始点，则创建起始点。
@@ -158,17 +296,18 @@ function handleClickMap(e) {
           return true;
         })
         .map((polyline) => {
-          // polyline.getPath()返回一个二维数组，代表该polyline对象的所有线段的坐标集合。
+          // polyline.getPath()返回一个二维数组，
+          // 代表该polyline对象的所有线段的坐标集合。
           const [path] = polyline.getPath();
           return [
             [path[0].lng, path[0].lat],
             [path[1].lng, path[1].lat],
           ];
         });
-      // console.log(pipePolylinePaths);
+      // console.debug(pipePolylinePaths);
 
       const endpoints = collectEndpoints(pipePolylinePoints);
-      // console.log(endpoints);
+      // console.debug(endpoints);
 
       // 在这些端点中寻找距离光标位置16px以内且最近的端点
       const closestEndpoints = endpoints
@@ -182,11 +321,11 @@ function handleClickMap(e) {
           return pixelPosDistance(a, pixel) - pixelPosDistance(b, pixel);
         });
 
-      // console.log("endpoints:", endpoints);
-      // console.log("closestEndpoint:", closestEndpoint[0]);
+      // console.debug("endpoints:", endpoints);
+      // console.debug("closestEndpoint:", closestEndpoint[0]);
       if (closestEndpoints.length > 0) {
         drawLineStartPos = container2lnglat(closestEndpoints[0]);
-        // console.log("吸附到端点：", drawLineStartPos);
+        // console.debug("吸附到端点：", drawLineStartPos);
       }
     }
     return;
@@ -199,8 +338,10 @@ function handleClickMap(e) {
     path: [[drawLineStartPos, drawLineEndPos]],
   });
 
-  // 绑定右键菜单
-  polyline.on("rightclick", handleRightClickPolyline);
+  // 鼠标移入移出事件
+  polyline.on("mouseover", handleMouseHoverPolyline);
+  polyline.on("mouseout", handleMouseLeavePolyline);
+  polyline.on("click", handleClickPolyline);
   // 绘制线段
   appRuntime.mapInstance.add(polyline);
 
@@ -212,56 +353,90 @@ function handleClickMap(e) {
  * 打开/关闭绘制线段模式
  */
 function toggleDrawLineMode() {
-  appStat.value.drawLineMode = !appStat.value.drawLineMode;
-  if (appStat.value.drawLineMode) {
-    appRuntime.mapInstance.on("click", handleClickMap);
+  if (drawMode.value === DRAW_POLYLINE_MODE) {
+    appRuntime.drawModeSM.changeCurrentState(DRAW_IDEL_MODE);
+    ElMessage.warning("绘制管道：关");
   } else {
-    appRuntime.drawLinePreviewLine.hide();
-    drawLineStartPos = null;
-    drawLineEndPos = null;
-    appRuntime.mapInstance.off("click", handleClickMap);
+    appRuntime.drawModeSM.changeCurrentState(DRAW_POLYLINE_MODE);
+    ElMessage.success("绘制管道： 开");
+  }
+}
+
+function handleClickFacility(e) {
+  // 如果当前处于编辑数据模式，则直接切换操作对象
+  if (drawMode.value === EDIT_EXT_DATA_MODE) {
+    appRuntime.drawModeSM.changeCurrentState(
+      EDIT_EXT_DATA_MODE,
+      e.target,
+      false,
+    );
+  }
+  // 否则只有当前状态为空闲态时才切换到编辑模式
+  else if (drawMode.value === DRAW_IDEL_MODE) {
+    appRuntime.drawModeSM.changeCurrentState(EDIT_EXT_DATA_MODE, e.target);
   }
 }
 
 /**
- * 处理删除线段
+ * 处理绘制设施的模式
  */
-function handleDeleteLine() {
-  ElMessageBox.confirm("确定删除此线段吗？").then(() => {
-    appRuntime.mapInstance.remove(appRuntime.activePolyline);
-    ElMessage.success("删除成功");
-  });
-}
+function handleDrawFacility(e) {
+  // 经纬坐标
+  const lnglat = e.lnglat;
+  // 像素坐标
+  const pixel = e.pixel;
 
-/**
- * 处理保存线段的自定义数据
- */
-function handleSaveCustomData(data) {
-  if (!appRuntime.activePolyline) return;
-  appRuntime.activePolyline.setExtData(data);
+  const facility = facilityList[currentSelectedFacilityId.value - 1];
+
+  const img = document.createElement("img");
+  img.src = facility.iconSrc;
+  img.alt = facility.text;
+  img.width = 32;
+  img.height = 32;
+  img.style.width = "32px";
+  img.style.height = "32px";
+  img.style.objectFit = "contain";
+  img.style.maxWidth = "none";
+
+  // console.debug(img);
+
+  const marker = new AMap.Marker({
+    position: lnglat,
+    content: img,
+    extData: facility,
+    title: facility.text,
+    anchor: "center",
+  });
+
+  marker.on("click", handleClickFacility);
+
+  appRuntime.mapInstance.add(marker);
+  if (!appRuntime.drawModeSM.getCustomContext().continuously) {
+    appRuntime.drawModeSM.changeCurrentState(DRAW_IDEL_MODE);
+  }
 }
 </script>
 
 <template>
   <GaoDeMap @mapLoaded="onMapReady"></GaoDeMap>
-  <BaseButton
-    :class="{ 'toggle-edit-mode-btn': true, active: appStat.drawLineMode }"
-    @click="toggleDrawLineMode"
-    >{{ appStat.drawLineMode ? "绘制管道(开)" : "绘制管道(关)" }}</BaseButton
-  >
-  <SegmentContextMenu
-    v-model:visible="contextMenuVisible"
-    :position="editExtMenuPos"
-    @edit="() => (dataPopupVisible = true)"
-    @delete="handleDeleteLine"
-  ></SegmentContextMenu>
 
-  <SegmentDataPopup
-    v-model:visible="dataPopupVisible"
-    :position="editExtMenuPos"
-    :customData="customLineData"
-    @save="handleSaveCustomData"
-  ></SegmentDataPopup>
+  <FacilityList
+    :active="drawMode === DRAW_FACILITY_MODE"
+    v-model:currentSelectedId="currentSelectedFacilityId"
+  ></FacilityList>
+
+  <PropertyPanel class="property-panel" :data="currentObjData"></PropertyPanel>
+
+  <el-button
+    type="primary"
+    :class="{
+      'draw-polyline-btn': true,
+      active: drawMode === DRAW_POLYLINE_MODE,
+    }"
+    @click="toggleDrawLineMode"
+  >
+    {{ drawMode === DRAW_POLYLINE_MODE ? "绘制管道(开)" : "绘制管道(关)" }}
+  </el-button>
 </template>
 
 <style scoped>
@@ -280,5 +455,20 @@ function handleSaveCustomData(data) {
 }
 .toggle-edit-mode-btn.active:hover {
   background-color: rgb(182, 0, 182);
+}
+
+.property-panel {
+  anchor-name: --property-panel;
+}
+
+.draw-polyline-btn {
+  position: absolute;
+  position-anchor: --property-panel;
+  right: anchor(left);
+  top: anchor(top);
+}
+
+.draw-polyline-btn.active {
+  background-color: purple;
 }
 </style>

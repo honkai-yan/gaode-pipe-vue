@@ -1,9 +1,13 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { useAppStatStore } from "@/store/appState";
 import { storeToRefs } from "pinia";
 import { appRuntime } from "@/runtime/appRuntime";
 import { ElMessage, ElLoading } from "element-plus";
+import {
+  DRAW_FACILITY_MODE,
+  DRAW_POLYLINE_MODE,
+} from "@/constants/drawModeStates";
 
 const appStatStore = useAppStatStore();
 const { appStat } = storeToRefs(appStatStore);
@@ -12,7 +16,7 @@ const drawLinePreviewLineStyle = {
   borderWeight: 3,
   strokeColor: "#3366FF",
   strokeOpacity: 1,
-  strokeWeight: 6,
+  strokeWeight: 3,
   strokeStyle: "dashed",
   // strokeStyle是dashed时有效
   strokeDasharray: [10, 5],
@@ -22,6 +26,18 @@ const drawLinePreviewLineStyle = {
 };
 
 const emit = defineEmits(["mapLoaded"]);
+const drawMode = appRuntime.drawModeSM.getStateRef();
+const mapCrosshairCursorOn = ref(false);
+
+watch(drawMode, (newVal) => {
+  if (!appRuntime.mapInstance) return;
+
+  if (newVal === DRAW_FACILITY_MODE || newVal === DRAW_POLYLINE_MODE) {
+    mapCrosshairCursorOn.value = true;
+  } else {
+    mapCrosshairCursorOn.value = false;
+  }
+});
 
 onMounted(() => {
   const loading = ElLoading.service({
@@ -37,7 +53,7 @@ onMounted(() => {
     .then((AMap) => {
       appRuntime.mapInstance = new AMap.Map("container");
 
-      // 添加绘制折现时的预览线
+      // 添加绘制线段时的预览线
       const previewLine = new AMap.Polyline({
         path: [[0, 0]],
         bubble: true,
@@ -70,12 +86,20 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div id="container"></div>
+  <div
+    id="container"
+    :class="{ crosshair: mapCrosshairCursorOn }"
+    ref="dropableMapElm"
+  ></div>
 </template>
 
 <style scoped>
 #container {
   width: 100svw;
   height: 100svh;
+  cursor: default !important;
+}
+#container.crosshair {
+  cursor: crosshair !important;
 }
 </style>
