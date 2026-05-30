@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import GaoDeMap from "./components/GaoDeMap.vue";
 import { useAppStatStore } from "./store/appState";
 import { storeToRefs } from "pinia";
@@ -10,7 +10,7 @@ import {
   lnglat2contaner,
   pixelPosDistance,
 } from "./utils";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import PropertyPanel from "./components/PropertyPanel.vue";
 import FacilityList from "./components/FacilityList.vue";
 import {
@@ -20,6 +20,7 @@ import {
   EDIT_EXT_DATA_MODE,
 } from "./constants/drawModeStates";
 import { facilityList } from "./data/facilityList";
+import ToolBar from "./components/ToolBar.vue";
 
 const appStatStore = useAppStatStore();
 const { appStat } = storeToRefs(appStatStore);
@@ -87,6 +88,8 @@ function handleKeyPressed(e) {
     }
   } else if (keysPressed["Alt"]) {
     appRuntime.altPressing = true;
+  } else if (keysPressed["Backspace"] && currentSelectObj) {
+    handleDeleteCurObj();
   }
 }
 
@@ -192,14 +195,14 @@ function onMapReady() {
     .addState(
       DRAW_POLYLINE_MODE,
       () => {
-        console.log("Enter draw line mode");
+        // console.log("Enter draw line mode");
         appRuntime.mapInstance.on("click", handleDrawPolyline);
         openClickThrough();
         ElMessage.success("绘制管道： 开");
       },
       null,
       () => {
-        console.log("Quit draw line mode");
+        // console.log("Quit draw line mode");
         currentSelectedFacilityId.value = -1;
         appRuntime.drawLinePreviewLine.hide();
         drawLineStartPos = null;
@@ -214,13 +217,13 @@ function onMapReady() {
     .addState(
       DRAW_FACILITY_MODE,
       () => {
-        console.log("Enter draw facility mode");
+        // console.log("Enter draw facility mode");
         appRuntime.mapInstance.on("click", handleDrawFacility);
         openClickThrough();
       },
       null,
       () => {
-        console.log("Quit draw facility mode");
+        // console.log("Quit draw facility mode");
         currentSelectedFacilityId.value = -1;
         appRuntime.mapInstance.off("click", handleDrawFacility);
         appStat.value.addFacilityContinuously = false;
@@ -231,10 +234,14 @@ function onMapReady() {
     .addState(
       EDIT_EXT_DATA_MODE,
       (_prevState, _ctx, target) => {
-        console.log("Enter edit mode");
+        // console.log("Enter edit mode");
 
         currentSelectObj = target;
         // console.debug(currentSelectObj);
+
+        if (!currentSelectObj) {
+          return;
+        }
 
         if (currentSelectObj.className === "Overlay.Polyline") {
           updateCurrentPolylineStyle();
@@ -247,13 +254,17 @@ function onMapReady() {
         currentObjData.value = currentSelectObj.getExtData();
       },
       (_prevState, target) => {
-        console.log("Run edit mode");
+        // console.log("Run edit mode");
 
         currentSelectObj = target;
         currentObjData.value = currentSelectObj.getExtData();
       },
       () => {
-        console.log("Quit edit mode");
+        // console.log("Quit edit mode");
+
+        if (!currentSelectObj) {
+          return;
+        }
 
         // 恢复对象样式
         if (currentSelectObj.className === "Overlay.Polyline") {
@@ -264,6 +275,12 @@ function onMapReady() {
         } else if (currentSelectObj.className === "AMap.Marker") {
           currentSelectObj.getContent().style.filter = "";
         }
+        // 保存组件数据
+        currentObjData.value.extData = currentObjData.value.extData.filter(
+          (val) => {
+            return val.key && val.key !== "";
+          },
+        );
         currentSelectObj.setExtData(currentObjData.value);
         currentObjData.value = null;
         currentSelectObj = null;
@@ -464,7 +481,7 @@ function handleDrawFacility(e) {
   marker.on("click", handleClickFacility);
 
   appRuntime.mapInstance.add(marker);
-  if (!appRuntime.drawModeSM.getCustomContext().continuously) {
+  if (!appStat.value.addFacilityContinuously) {
     appRuntime.drawModeSM.changeCurrentState(DRAW_IDEL_MODE);
   }
 }
@@ -494,28 +511,37 @@ function handleSelectedFacilityIdChanged(newId, doubleClicked) {
   currentSelectedFacilityId.value = newId;
 }
 
-function handleDeleteObj() {
+function handleDeleteCurObj() {
   if (!currentSelectObj) {
     return;
   }
-  appRuntime.mapInstance.remove(currentSelectObj);
-  currentObjData.value = null;
+
+  ElMessageBox.confirm("确认删除此对象吗？", {
+    confirmButtonText: "确定",
+    cancelButtonText: "取消",
+  })
+    .then(() => {
+      appRuntime.mapInstance.remove(currentSelectObj);
+      currentSelectObj = null;
+      currentObjData.value = null;
+    })
+    .catch((_) => null); // 忽略取消
 }
 </script>
 
 <template>
-  <GaoDeMap @mapLoaded="onMapReady"></GaoDeMap>
+  <ToolBar></ToolBar>
 
-  <FacilityList
-    :currentSelectedId="currentSelectedFacilityId"
-    v-on:selectedIdChanged="handleSelectedFacilityIdChanged"
-  ></FacilityList>
+  <div class="content">
+    <FacilityList
+      :currentSelectedId="currentSelectedFacilityId"
+      v-on:selectedIdChanged="handleSelectedFacilityIdChanged"
+    ></FacilityList>
 
-  <PropertyPanel
-    class="property-panel"
-    :data="currentObjData"
-    v-on:deleteObj="handleDeleteObj"
-  ></PropertyPanel>
+    <GaoDeMap @mapLoaded="onMapReady"></GaoDeMap>
+
+    <PropertyPanel :data="currentObjData"></PropertyPanel>
+  </div>
 </template>
 
 <style scoped>
@@ -536,18 +562,9 @@ function handleDeleteObj() {
   background-color: rgb(182, 0, 182);
 }
 
-.property-panel {
-  anchor-name: --property-panel;
-}
-
-.draw-polyline-btn {
-  position: absolute;
-  position-anchor: --property-panel;
-  right: anchor(left);
-  top: anchor(top);
-}
-
-.draw-polyline-btn.active {
-  background-color: purple;
+.content {
+  position: relative;
+  flex: 1;
+  display: flex;
 }
 </style>

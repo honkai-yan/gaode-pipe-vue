@@ -51,7 +51,10 @@ onMounted(() => {
     version: "2.0",
   })
     .then((AMap) => {
-      appRuntime.mapInstance = new AMap.Map("container");
+      appRuntime.mapInstance = new AMap.Map("container", {
+        center: [116.23, 39.64],
+        zoom: 5.3,
+      });
 
       // 添加绘制线段时的预览线
       const previewLine = new AMap.Polyline({
@@ -95,9 +98,9 @@ onUnmounted(() => {
 
 <style scoped>
 #container {
-  width: 100svw;
-  height: 100svh;
+  flex: 1;
   cursor: default !important;
+  position: relative;
 }
 #container.crosshair {
   cursor: crosshair !important;

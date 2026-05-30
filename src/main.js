@@ -1,5 +1,6 @@
 import { createApp } from "vue";
 import "./style.css";
+import "./assets/icon-font/iconfont.css"
 import "element-plus/dist/index.css";
 import App from "./AppX.vue";
 import { createPinia } from "pinia";

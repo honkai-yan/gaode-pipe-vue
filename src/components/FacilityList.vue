@@ -84,23 +84,21 @@ function handleDbClickFacility(id) {
 
 <style scoped>
 .facility-list-wrapper {
-  position: absolute;
   width: fit-content;
   height: 100%;
-  left: 0;
-  top: 0;
-  display: flex;
-  align-items: start;
 }
 
 .facility-list {
   width: fit-content;
   height: 100%;
   position: relative;
-  background-color: rgba(255, 255, 255, 0.9);
   display: flex;
   flex-direction: column;
   anchor-name: --facility-list-wrapper;
+  box-shadow: none;
+  border-radius: 0;
+  border: 0;
+  border-right: 1px solid rgba(117, 117, 117, 0.2);
 }
 
 .facility-list:deep(.el-card__body) {
@@ -118,7 +116,7 @@ function handleDbClickFacility(id) {
   grid-template-columns: repeat(3, 70px);
   grid-template-rows: 70px;
   grid-auto-rows: 70px;
-  gap: 8px;
+  gap: 12px;
 }
 
 .facility-item {
@@ -126,8 +124,7 @@ function handleDbClickFacility(id) {
   display: flex;
   flex-direction: column;
   border-radius: 8px;
-  /* padding: 8px; */
-  background-color: rgba(243, 243, 243, 0.7);
+  background-color: rgba(239, 239, 239, 0.7);
   cursor: pointer;
 }
 .facility-item:hover {
@@ -147,7 +144,7 @@ function handleDbClickFacility(id) {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 8px;
+  padding: 12px;
 }
 
 .facility-item img {
@@ -165,7 +162,7 @@ function handleDbClickFacility(id) {
   font-size: 10px;
   line-height: 10px;
 
-  padding: 0 4px;
+  padding: 0 8px;
 
   text-align: center;
   overflow: hidden;
@@ -181,6 +178,8 @@ function handleDbClickFacility(id) {
 
   left: anchor(right);
   top: anchor(top);
+
+  z-index: 1;
 }
 
 .mode-instruct:deep(span) {

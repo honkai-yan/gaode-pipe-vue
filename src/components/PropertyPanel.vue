@@ -1,4 +1,5 @@
 <script setup>
+import { presetComDataKeys } from "@/data/componentDataKeys";
 import { ElMessageBox } from "element-plus";
 
 /**
@@ -16,8 +17,6 @@ const props = defineProps({
   },
 });
 
-const emits = defineEmits(["deleteObj"]);
-
 function handleAddData() {
   // console.log(props.data);
   props.data.extData.push({
@@ -31,35 +30,29 @@ function handleDeleteData(idx) {
   props.data.extData.splice(idx, 1);
 }
 
-async function handleDeleteObj() {
-  try {
-    await ElMessageBox.confirm("确认删除此对象吗？", {
-      confirmButtonText: "确定",
-      cancelButtonText: "取消",
-    });
-    emits("deleteObj");
-  } catch (_) {
-    // 忽略操作
-  }
+function querySearch(_queryString, cb) {
+  cb(presetComDataKeys);
 }
 </script>
 
 <template>
-  <el-card class="property-panel-wrapper">
-    <div class="choose-tip" v-if="props.data === null">请选择一个对象</div>
+  <el-card
+    :class="{
+      'property-panel-wrapper': true,
+      active: props.data,
+    }"
+  >
+    <!-- <div class="choose-tip" v-if="props.data === null">请选择一个对象</div> -->
 
     <div class="property-panel" v-if="props.data !== null">
-      <p style="font-weight: bold">对象类型：{{ props.data.type }}</p>
-
-      <!-- 删除按钮 -->
-      <el-button style="margin-top: 8px" type="danger" @click="handleDeleteObj"
-        >删除对象</el-button
-      >
+      <div class="header">
+        <p style="font-weight: bold">对象类型：{{ props.data.type }}</p>
+      </div>
 
       <!-- 自定义数据 -->
       <div class="custom-data">
         <div class="header">
-          <h3>自定义数据</h3>
+          <h3>对象属性</h3>
           <el-button
             class="add-data-btn"
             circle
@@ -75,10 +68,14 @@ async function handleDeleteObj() {
         <ul v-if="props.data.extData.length > 0">
           <li class="data-row" v-for="(row, idx) in props.data.extData">
             <!-- 键 -->
-            <el-input v-model="row.key"></el-input>
+            <el-autocomplete
+              @keydown.stop
+              v-model="row.key"
+              :fetch-suggestions="querySearch"
+            ></el-autocomplete>
             <span>-</span>
             <!-- 值 -->
-            <el-input v-model="row.value"></el-input>
+            <el-input @keydown.stop v-model="row.value"></el-input>
             <el-button link type="danger" @click="() => handleDeleteData(idx)"
               >×</el-button
             >
@@ -95,9 +92,16 @@ async function handleDeleteObj() {
   width: 300px;
   max-width: 300px;
   height: 100%;
-  right: 0;
+  right: -300px;
   top: 0;
-  background-color: rgba(255, 255, 255, 0.9);
+  transition: 0.1s right;
+  box-shadow: none;
+  border-radius: 0;
+  border: 0;
+  border-left: 1px solid rgba(117, 117, 117, 0.2);
+}
+.property-panel-wrapper.active {
+  right: 0;
 }
 
 .choose-tip {
@@ -118,6 +122,17 @@ async function handleDeleteObj() {
 
 .property-panel:deep(.el-card__body) {
   padding: 12px;
+}
+
+.property-panel > .header {
+  display: flex;
+  height: fit-content;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.property-panel > .header .del-btn {
+  scale: 0.9;
 }
 
 .cutom-name {
