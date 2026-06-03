@@ -72,8 +72,8 @@ function handleIconSizeChange(val) {
     }"
   >
     <div class="property-panel" v-if="props.data !== null">
-      <div class="header">
-        <p style="font-weight: bold">对象类型：{{ props.data.type }}</p>
+      <div class="header" style="border-bottom: 1px solid #ccc">
+        <p>对象类型：{{ props.data.type }}</p>
       </div>
 
       <div class="resize-bar-widget" v-if="props.data.type === '设施'">
@@ -154,6 +154,8 @@ function handleIconSizeChange(val) {
   border-radius: 0;
   border: 0;
   border-left: 1px solid rgba(117, 117, 117, 0.2);
+  
+  color: #4a4a4a;
 }
 .property-panel-wrapper.active {
   right: 0;
@@ -175,8 +177,8 @@ function handleIconSizeChange(val) {
   align-items: stretch;
 }
 
-.property-panel:deep(.el-card__body) {
-  padding: 12px;
+:deep(.el-card__body) {
+  padding: 0;
 }
 
 .property-panel > .header {
@@ -184,6 +186,7 @@ function handleIconSizeChange(val) {
   height: fit-content;
   align-items: center;
   justify-content: space-between;
+  padding: 12px;
 }
 
 .property-panel > .header .del-btn {
@@ -193,11 +196,12 @@ function handleIconSizeChange(val) {
 .resize-bar-widget {
   display: flex;
   flex-direction: column;
-  margin-top: 16px;
+  padding: 12px;
+  border-bottom: 1px solid #ccc;
 }
 
 .resize-bar-widget span {
-  font-weight: bold;
+  /* font-weight: bold; */
 }
 
 .resize-bar-widget:deep(.el-slider) {
@@ -221,7 +225,7 @@ function handleIconSizeChange(val) {
 
 .custom-data {
   flex: 1;
-  margin-top: 16px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -234,7 +238,7 @@ function handleIconSizeChange(val) {
 }
 
 .custom-data .header h3 {
-  font-weight: bold;
+  /* font-weight: bold; */
 }
 
 .custom-data .header .add-data-btn {

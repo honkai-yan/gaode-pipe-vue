@@ -29,9 +29,13 @@ let drawMode = appRuntime.drawModeSM.getStateRef();
 
 const facilityList = appStat.value.facilities;
 
+// 绘制线段时的起始点
 let drawLineStartPos = null;
+// 绘制线段时的终点
 let drawLineEndPos = null;
+// 当前鼠标位置对应的经纬度坐标
 let currentMousePosLnglat = null;
+// 默认线段样式
 const defaultLineStyle = {
   outlineColor: "#ffeeff",
   borderWeight: 3,
@@ -43,13 +47,11 @@ const defaultLineStyle = {
   lineCap: "round",
   zIndex: 50,
 };
-// 临时保存线段的自定义数据
-// const customLineData = ref([]);
-// 当前按下的按键
-const keysPressed = {};
-// 当前选中的设施的id
+// 当前按下按键的缓存
+let keysPressed = {};
+// 当前选中设施的id
 const currentSelectedFacilityId = ref(-1);
-// 当前选中的对象的数据
+// 当前选中对象的数据
 const currentObjExtData = ref(null);
 // 当前选中的对象
 let currentSelectObj = null;
@@ -76,13 +78,31 @@ const initialExtData = {
   extData: [],
   iconSize: 32,
 };
+// 是否正在拖动对象
+let isMovingObj = false;
+// 当前正在拖动的对象
+let currentDragingObj = null;
 
 /**
  * 处理鼠标在地图元素上移动的事件
  */
 function handleMouseMoveOnMap(e) {
-  currentMousePosLnglat = e.lnglat;
-  // console.debug(currentMousePosLnglat);
+  const lnglat = e.lnglat;
+  // console.debug(lnglat);
+  // console.log(e);
+  currentMousePosLnglat = lnglat;
+  
+  if (!e.originEvent.ctrlKey) {
+    if (isMovingObj && currentDragingObj) {
+      isMovingObj = false;
+      currentDragingObj.setOptions({
+        ...currentDragingObj.getOptions(),
+        bubble: false,
+      });
+    }
+  } else if (isMovingObj && currentDragingObj) {
+    currentDragingObj.setPosition(lnglat);
+  }
 }
 
 /**
@@ -91,7 +111,7 @@ function handleMouseMoveOnMap(e) {
 function drawPreviewLine() {
   if (drawMode.value === DRAW_POLYLINE_MODE && drawLineStartPos) {
     const previewPolyline = appRuntime.drawLinePreviewLine;
-    // console.debug(previewPolyline);>
+    // console.debug(previewPolyline);
     previewPolyline.setPath([[drawLineStartPos, currentMousePosLnglat]]);
     previewPolyline.show();
   }
@@ -104,6 +124,7 @@ function handleKeyPressed(e) {
   console.debug(e.code);
   const key = e.key;
   keysPressed[key] = true;
+
   if (keysPressed["Escape"]) {
     if (drawMode.value === DRAW_POLYLINE_MODE) {
       appRuntime.drawModeSM.changeCurrentState(DRAW_IDEL_MODE);
@@ -112,33 +133,36 @@ function handleKeyPressed(e) {
     } else if (drawMode.value === EDIT_EXT_DATA_MODE) {
       appRuntime.drawModeSM.changeCurrentState(DRAW_IDEL_MODE);
     }
-  } else if (keysPressed["Alt"]) {
-    appRuntime.altPressing = true;
   } else if (keysPressed["Backspace"] && currentSelectObj) {
     handleDeleteCurObj();
   }
 }
 
 function handleKeyUp(e) {
-  const key = e.key;
-  if (key === "Alt") {
-    appRuntime.altPressing = false;
-  }
-  keysPressed[key] = false;
+  keysPressed[e.key] = false;
 }
 
 /**
  * 处理点击地图组件
  */
 function handleClickMap(e) {
+  console.debug("click map");
   if (drawMode.value === EDIT_EXT_DATA_MODE) {
     appRuntime.drawModeSM.changeCurrentState(DRAW_IDEL_MODE);
   }
 }
 
+/**
+ * 清空按键缓存避免卡键
+ */
+function clearKeydownCache() {
+  keysPressed = {};
+}
+
 onMounted(() => {
   document.addEventListener("keydown", handleKeyPressed);
   document.addEventListener("keyup", handleKeyUp);
+  window.addEventListener("blur", clearKeydownCache);
 });
 
 onUnmounted(() => {
@@ -148,12 +172,14 @@ onUnmounted(() => {
   }
   document.removeEventListener("keydown", handleKeyPressed);
   document.removeEventListener("keyup", handleKeyUp);
+  window.removeEventListener("blur", clearKeydownCache);
 });
 
 /**
  * 开启地图上所有元素的鼠标穿透，包括管道和设施
  */
 function openClickThrough() {
+  console.debug("open click through");
   const polylines = appRuntime.mapInstance.getAllOverlays("polyline");
   if (polylines.length > 0) {
     for (const polyline of polylines) {
@@ -179,6 +205,7 @@ function openClickThrough() {
  * 还原地图上所有元素的鼠标穿透
  */
 function restoreClickThrough() {
+  console.debug("restore click through");
   const polylines = appRuntime.mapInstance.getAllOverlays("polyline");
   if (polylines.length > 0) {
     for (const polyline of polylines) {
@@ -383,7 +410,7 @@ function handleDrawPolyline(e) {
     // 按住Alt时吸附不生效。
     // 与多个端点间距16px以内时，取最近的端点。
     drawLineStartPos = lnglat;
-    if (!appRuntime.altPressing) {
+    if (!e.originEvent.altKey) {
       // 收集所有端点
       const pipePolylinePoints = appRuntime.mapInstance
         .getAllOverlays("polyline")
@@ -419,7 +446,7 @@ function handleDrawPolyline(e) {
         });
 
       console.debug("endpoints:", endpoints);
-      console.debug("closestEndpoint:", closestEndpoints[0]);
+      console.debug("closestEndpoints:", closestEndpoints);
       if (closestEndpoints.length > 0) {
         drawLineStartPos = container2lnglat(closestEndpoints[0]);
         console.debug("吸附到端点：", drawLineStartPos);
@@ -433,6 +460,7 @@ function handleDrawPolyline(e) {
   const polyline = new AMap.Polyline({
     ...defaultLineStyle,
     path: [[drawLineStartPos, drawLineEndPos]],
+    bubble: true,
   });
 
   // 鼠标移入移出事件
@@ -466,6 +494,29 @@ function handleClickFacility(e) {
   }
 }
 
+function handleMouseDownFacility(e) {
+  // console.debug(e.originavent.ctrlKey);
+  if (e.originEvent.ctrlKey) {
+    isMovingObj = true;
+    const facility = e.target;
+    currentDragingObj = facility;
+    facility.setOptions({
+      ...facility.getOptions(),
+      bubble: true,
+    });
+  }
+}
+
+function handleMouseUpFacility(e) {
+  isMovingObj = false;
+  currentDragingObj = null;
+  const facility = e.target;
+  facility.setOptions({
+    ...facility.getOptions(),
+    bubble: false,
+  });
+}
+
 /**
  * 处理绘制设施的模式
  */
@@ -494,11 +545,18 @@ function handleDrawFacility(e) {
     position: lnglat,
     content: img,
     extData: data,
+    bubble: true,
     title: facility.text,
     anchor: "center",
   });
 
   marker.on("click", handleClickFacility);
+  marker.on("mousedown", handleMouseDownFacility);
+  marker.on("mouseup", handleMouseUpFacility);
+
+  // setInterval(() => {
+  //   console.debug(marker.getOptions().bubble);
+  // }, 1000);
 
   appRuntime.mapInstance.add(marker);
   if (!appStat.value.addFacilityContinuously) {
