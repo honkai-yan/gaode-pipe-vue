@@ -20,7 +20,7 @@ import {
   EDIT_EXT_DATA_MODE,
 } from "./constants/drawModeStates";
 import Header from "./components/Header.vue";
-import { Tab, TabGroup, TabList, TabPanels, TabPanel  } from "@headlessui/vue";
+import { Tab, TabGroup, TabList, TabPanels, TabPanel } from "@headlessui/vue";
 import DatabasePanel from "./components/DatabasePanel.vue";
 
 const appStatStore = useAppStatStore();
@@ -45,14 +45,37 @@ const defaultLineStyle = {
 };
 // 临时保存线段的自定义数据
 // const customLineData = ref([]);
-// 当前按下的按
+// 当前按下的按键
 const keysPressed = {};
 // 当前选中的设施的id
 const currentSelectedFacilityId = ref(-1);
 // 当前选中的对象的数据
-const currentObjData = ref(null);
+const currentObjExtData = ref(null);
 // 当前选中的对象
 let currentSelectObj = null;
+// 初始自定义数据
+const initialExtData = {
+  type: "",
+  fixedData: [
+    {
+      name: "深度",
+      en_name: "depth",
+      value: "",
+    },
+    {
+      name: "数据1",
+      en_name: "custom_data1",
+      value: "",
+    },
+    {
+      name: "数据2",
+      en_name: "custom_data2",
+      value: "",
+    },
+  ],
+  extData: [],
+  iconSize: 32,
+};
 
 /**
  * 处理鼠标在地图元素上移动的事件
@@ -68,7 +91,7 @@ function handleMouseMoveOnMap(e) {
 function drawPreviewLine() {
   if (drawMode.value === DRAW_POLYLINE_MODE && drawLineStartPos) {
     const previewPolyline = appRuntime.drawLinePreviewLine;
-    // console.debug(previewPolyline);
+    // console.debug(previewPolyline);>
     previewPolyline.setPath([[drawLineStartPos, currentMousePosLnglat]]);
     previewPolyline.show();
   }
@@ -77,8 +100,8 @@ function drawPreviewLine() {
 
 // 处理键盘事件
 function handleKeyPressed(e) {
-  // console.debug(e.key);
-  // console.debug(e.code);
+  console.debug(e.key);
+  console.debug(e.code);
   const key = e.key;
   keysPressed[key] = true;
   if (keysPressed["Escape"]) {
@@ -178,7 +201,7 @@ function restoreClickThrough() {
 }
 
 /**
- * 地图准备好后注册必要的事件并初始化一些全局地图元素
+ * 地图准备好后注册必要的事件并做一些初始化
  */
 function onMapReady() {
   console.debug(appStat.value.mapInstanceLoadStat);
@@ -198,14 +221,14 @@ function onMapReady() {
     .addState(
       DRAW_POLYLINE_MODE,
       () => {
-        // console.debug("Enter draw line mode");
+        console.debug("Enter draw line mode");
         appRuntime.mapInstance.on("click", handleDrawPolyline);
         openClickThrough();
         // ElMessage.success("绘制管道： 开");
       },
       null,
       () => {
-        // console.debug("Quit draw line mode");
+        console.debug("Quit draw line mode");
         currentSelectedFacilityId.value = -1;
         appRuntime.drawLinePreviewLine.hide();
         drawLineStartPos = null;
@@ -220,13 +243,13 @@ function onMapReady() {
     .addState(
       DRAW_FACILITY_MODE,
       () => {
-        // console.debug("Enter draw facility mode");
+        console.debug("Enter draw facility mode");
         appRuntime.mapInstance.on("click", handleDrawFacility);
         openClickThrough();
       },
       null,
       () => {
-        // console.debug("Quit draw facility mode");
+        console.debug("Quit draw facility mode");
         currentSelectedFacilityId.value = -1;
         appRuntime.mapInstance.off("click", handleDrawFacility);
         appStat.value.addFacilityContinuously = false;
@@ -237,10 +260,10 @@ function onMapReady() {
     .addState(
       EDIT_EXT_DATA_MODE,
       (_prevState, _ctx, target) => {
-        // console.debug("Enter edit mode");
+        console.debug("Enter edit mode");
 
         currentSelectObj = target;
-        // console.debug(currentSelectObj);
+        console.debug(currentSelectObj);
 
         if (!currentSelectObj) {
           return;
@@ -250,20 +273,20 @@ function onMapReady() {
           updateCurrentPolylineStyle();
         } else if (currentSelectObj.className === "AMap.Marker") {
           const content = currentSelectObj.getContent();
-          // console.debug(content);
-          content.style.filter = "drop-shadow(0 0 5px rgba(0, 0, 0, .6))";
+          console.debug(content);
+          content.style.filter = "drop-shadow(0 0 5px rgba(0, 0, 0, 1))";
         }
 
-        currentObjData.value = currentSelectObj.getExtData();
+        currentObjExtData.value = currentSelectObj.getExtData();
       },
       (_prevState, target) => {
-        // console.debug("Run edit mode");
+        console.debug("Run edit mode");
 
         currentSelectObj = target;
-        currentObjData.value = currentSelectObj.getExtData();
+        currentObjExtData.value = currentSelectObj.getExtData();
       },
       () => {
-        // console.debug("Quit edit mode");
+        console.debug("Quit edit mode");
 
         if (!currentSelectObj) {
           return;
@@ -279,13 +302,12 @@ function onMapReady() {
           currentSelectObj.getContent().style.filter = "";
         }
         // 保存组件数据
-        currentObjData.value.extData = currentObjData.value.extData.filter(
-          (val) => {
+        currentObjExtData.value.extData =
+          currentObjExtData.value.extData.filter((val) => {
             return val.key && val.key !== "";
-          },
-        );
-        currentSelectObj.setExtData(currentObjData.value);
-        currentObjData.value = null;
+          });
+        currentSelectObj.setExtData(currentObjExtData.value);
+        currentObjExtData.value = null;
         currentSelectObj = null;
       },
     );
@@ -350,8 +372,8 @@ function handleDrawPolyline(e) {
   // 像素坐标
   const pixel = e.pixel;
 
-  // console.debug("经纬坐标：", lnglat);
-  // console.debug("像素坐标：", pixel);
+  console.debug("经纬坐标：", lnglat);
+  console.debug("像素坐标：", pixel);
 
   // 尝试绘制线段。
   // 如果没有起始点，则创建起始点。
@@ -381,10 +403,8 @@ function handleDrawPolyline(e) {
             [path[1].lng, path[1].lat],
           ];
         });
-      // console.debug(pipePolylinePaths);
-
       const endpoints = collectEndpoints(pipePolylinePoints);
-      // console.debug(endpoints);
+      console.debug(endpoints);
 
       // 在这些端点中寻找距离光标位置16px以内且最近的端点
       const closestEndpoints = endpoints
@@ -398,11 +418,11 @@ function handleDrawPolyline(e) {
           return pixelPosDistance(a, pixel) - pixelPosDistance(b, pixel);
         });
 
-      // console.debug("endpoints:", endpoints);
-      // console.debug("closestEndpoint:", closestEndpoint[0]);
+      console.debug("endpoints:", endpoints);
+      console.debug("closestEndpoint:", closestEndpoints[0]);
       if (closestEndpoints.length > 0) {
         drawLineStartPos = container2lnglat(closestEndpoints[0]);
-        // console.debug("吸附到端点：", drawLineStartPos);
+        console.debug("吸附到端点：", drawLineStartPos);
       }
     }
     return;
@@ -420,10 +440,9 @@ function handleDrawPolyline(e) {
   polyline.on("mouseout", handleMouseLeavePolyline);
   polyline.on("click", handleClickPolyline);
 
-  polyline.setExtData({
-    type: "管道",
-    extData: [],
-  });
+  let data = { ...initialExtData };
+  data.type = "管道";
+  polyline.setExtData(data);
 
   // 绘制线段
   appRuntime.mapInstance.add(polyline);
@@ -461,22 +480,20 @@ function handleDrawFacility(e) {
   const img = document.createElement("img");
   img.src = facility.iconSrc;
   img.alt = facility.text;
-  img.width = 32;
-  img.height = 32;
-  img.style.width = "32px";
-  img.style.height = "32px";
+  img.width = initialExtData.iconSize;
+  img.height = initialExtData.iconSize;
+  img.style.width = initialExtData.iconSize + "px";
+  img.style.height = initialExtData.iconSize + "px";
   img.style.objectFit = "contain";
   img.style.maxWidth = "none";
 
-  // console.debug(img);
+  console.debug(img);
 
+  let data = { ...initialExtData, ...facility };
   const marker = new AMap.Marker({
     position: lnglat,
     content: img,
-    extData: {
-      ...facility,
-      extData: [],
-    },
+    extData: data,
     title: facility.text,
     anchor: "center",
   });
@@ -496,7 +513,7 @@ function handleSelectedFacilityIdChanged(newId, doubleClicked) {
   if (newId < 1) {
     return;
   }
-  // console.debug(newId, doubleClicked);
+  console.debug(newId, doubleClicked);
 
   // id为1的是管道
   if (newId === 1) {
@@ -526,7 +543,7 @@ function handleDeleteCurObj() {
     .then(() => {
       appRuntime.mapInstance.remove(currentSelectObj);
       currentSelectObj = null;
-      currentObjData.value = null;
+      currentObjExtData.value = null;
     })
     .catch((_) => null); // 忽略取消
 }
@@ -584,7 +601,10 @@ function handleDeleteCurObj() {
 
     <GaoDeMap @mapLoaded="onMapReady"></GaoDeMap>
 
-    <PropertyPanel :data="currentObjData"></PropertyPanel>
+    <PropertyPanel
+      :data="currentObjExtData"
+      :instance="currentSelectObj"
+    ></PropertyPanel>
   </div>
 </template>
 

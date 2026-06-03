@@ -70,7 +70,7 @@ onMounted(() => {
       previewLine.hide();
 
       console.debug("地图加载成功");
-      // console.debug(appStat.value.mapInstanceLoadStat);
+      console.debug(appStat.value.mapInstanceLoadStat);
       appStat.value.mapInstanceLoadStat = "done";
       loading.close();
       emit("mapLoaded");

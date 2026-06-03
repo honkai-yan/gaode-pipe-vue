@@ -1,4 +1,5 @@
 import { facilityList } from "@/data/facilityList";
+import { acceptHMRUpdate } from "pinia";
 import { defineStore } from "pinia";
 import { ref } from "vue";
 
@@ -11,3 +12,8 @@ export const useAppStatStore = defineStore("appStat", () => {
 
   return { appStat };
 });
+
+// Vite热更新时保留pinia的状态
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useAppStatStore, import.meta.hot));
+}

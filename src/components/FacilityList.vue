@@ -17,7 +17,7 @@ const addCompName = ref("");
 const fileSelector = ref(null);
 
 function handleUploadImgChanged(e) {
-  // console.debug(e.target.files);
+  console.debug(e.target.files);
   if (e.target.files.length === 0) {
     return;
   }

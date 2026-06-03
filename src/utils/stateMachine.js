@@ -75,7 +75,7 @@ export class StateMachine {
       return;
     }
 
-    // console.debug("change to:", stateName);
+    console.debug("change to:", stateName);
 
     this._checkState(stateName);
 

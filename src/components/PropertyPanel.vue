@@ -2,22 +2,34 @@
 import { presetComDataKeys } from "@/data/componentDataKeys";
 
 /**
+instance: Gaode Instance // 高德的覆盖物对象
+
+data:
 {
   type: string,
   extData: {
     key: string,
     val: string,
   }[],
+  fixedData: {
+    name: string,
+    en_name: string,
+    value: string
+  }[],
+  iconSize: number
 }
  */
 const props = defineProps({
+  instance: {
+    type: Object,
+  },
   data: {
     type: Object,
   },
 });
 
 function handleAddData() {
-  // console.debug(props.data);
+  console.debug(props.data);
   props.data.extData.push({
     key: "",
     value: "",
@@ -25,12 +37,30 @@ function handleAddData() {
 }
 
 function handleDeleteData(idx) {
-  // console.debug(idx);
+  console.debug(idx);
   props.data.extData.splice(idx, 1);
 }
 
 function querySearch(_queryString, cb) {
   cb(presetComDataKeys);
+}
+
+function handleIconSizeChange(val) {
+  if (!props.instance) {
+    return;
+  }
+
+  const elm = props.instance.getContent();
+  console.debug(elm);
+  if (!elm) {
+    console.error("Get html elm failed");
+    return;
+  }
+
+  elm.width = val;
+  elm.height = val;
+  elm.style.width = val + "px";
+  elm.style.height = val + "px";
 }
 </script>
 
@@ -41,11 +71,20 @@ function querySearch(_queryString, cb) {
       active: props.data,
     }"
   >
-    <!-- <div class="choose-tip" v-if="props.data === null">请选择一个对象</div> -->
-
     <div class="property-panel" v-if="props.data !== null">
       <div class="header">
         <p style="font-weight: bold">对象类型：{{ props.data.type }}</p>
+      </div>
+
+      <div class="resize-bar-widget" v-if="props.data.type === '设施'">
+        <span>调整图标大小</span>
+        <el-slider
+          :step="2"
+          :min="12"
+          :max="64"
+          v-model="props.data.iconSize"
+          @input="handleIconSizeChange"
+        ></el-slider>
       </div>
 
       <!-- 自定义数据 -->
@@ -60,21 +99,38 @@ function querySearch(_queryString, cb) {
             >+</el-button
           >
         </div>
-        <el-empty
-          v-if="props.data.extData.length === 0"
-          description="暂无自定义数据"
-        ></el-empty>
-        <ul v-if="props.data.extData.length > 0">
+
+        <ul>
+          <!-- 固定数据 -->
+          <li
+            class="data-row"
+            :key="idx"
+            v-for="(fixedData, idx) in props.data.fixedData"
+          >
+            <span class="data-row__label">{{ fixedData.name }}</span>
+            <!-- 值 -->
+            <el-input
+              class="data-row__input"
+              @keydown.stop
+              v-model="fixedData.value"
+            ></el-input>
+          </li>
+
+          <!-- 自定义数据 -->
           <li class="data-row" v-for="(row, idx) in props.data.extData">
             <!-- 键 -->
             <el-autocomplete
+              class="data-row__label"
               @keydown.stop
               v-model="row.key"
               :fetch-suggestions="querySearch"
             ></el-autocomplete>
-            <span>-</span>
             <!-- 值 -->
-            <el-input @keydown.stop v-model="row.value"></el-input>
+            <el-input
+              class="data-row__input"
+              @keydown.stop
+              v-model="row.value"
+            ></el-input>
             <el-button link type="danger" @click="() => handleDeleteData(idx)"
               >×</el-button
             >
@@ -134,6 +190,20 @@ function querySearch(_queryString, cb) {
   scale: 0.9;
 }
 
+.resize-bar-widget {
+  display: flex;
+  flex-direction: column;
+  margin-top: 16px;
+}
+
+.resize-bar-widget span {
+  font-weight: bold;
+}
+
+.resize-bar-widget:deep(.el-slider) {
+  padding: 0 12px;
+}
+
 .cutom-name {
   display: flex;
   gap: 10px;
@@ -184,6 +254,16 @@ function querySearch(_queryString, cb) {
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+:deep(.data-row__label) {
+  display: block;
+  width: 70px;
+  font-size: 14px;
+}
+
+.data-row__input {
+  flex: 1;
 }
 
 .custom-data .data-row:last-of-type {
