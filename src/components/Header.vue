@@ -1,25 +1,30 @@
 <script setup></script>
 
 <template>
-  <div class="header">
+  <header class="header">
     <div class="toolbar">
       <div class="item" title="保存项目">
-        <span class="iconfont icon-save"></span>
+        <span class="iconfont icon-save" style="font-size: 24px"></span>
       </div>
       <div class="item" title="导入项目">
         <span
           class="iconfont icon-import1"
-          style="font-size: 16px; font-weight: bold"
+          style="font-size: 20px; font-weight: bold"
         ></span>
       </div>
       <div class="item" title="计算">
         <span
           class="iconfont icon-calculate"
-          style="font-size: 16px; font-weight: bold"
+          style="font-size: 18px; font-weight: bold"
         ></span>
       </div>
     </div>
-  </div>
+
+    <div class="brand">
+      <img src="/brand-dev.svg" alt="brand logo">
+      <h1>设计平台</h1>
+    </div>
+  </header>
 </template>
 
 <style scoped>
@@ -37,8 +42,11 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 4px;
-  margin: 0 auto;
+  gap: 12px;
+
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .header .item {
@@ -61,5 +69,25 @@
 
 .header .item span {
   font-size: 20px;
+}
+
+.header .brand {
+  height: 100%;
+  width: fit-content;
+
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-left: 12px;
+}
+
+.header .brand img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+}
+
+.header .brand h1 {
+  font-weight: bold;
 }
 </style>

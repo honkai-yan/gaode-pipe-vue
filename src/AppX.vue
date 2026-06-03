@@ -19,12 +19,15 @@ import {
   DRAW_POLYLINE_MODE,
   EDIT_EXT_DATA_MODE,
 } from "./constants/drawModeStates";
-import { facilityList } from "./data/facilityList";
-import ToolBar from "./components/ToolBar.vue";
+import Header from "./components/Header.vue";
+import { Tab, TabGroup, TabList, TabPanels, TabPanel  } from "@headlessui/vue";
+import DatabasePanel from "./components/DatabasePanel.vue";
 
 const appStatStore = useAppStatStore();
 const { appStat } = storeToRefs(appStatStore);
 let drawMode = appRuntime.drawModeSM.getStateRef();
+
+const facilityList = appStat.value.facilities;
 
 let drawLineStartPos = null;
 let drawLineEndPos = null;
@@ -195,14 +198,14 @@ function onMapReady() {
     .addState(
       DRAW_POLYLINE_MODE,
       () => {
-        // console.log("Enter draw line mode");
+        // console.debug("Enter draw line mode");
         appRuntime.mapInstance.on("click", handleDrawPolyline);
         openClickThrough();
-        ElMessage.success("绘制管道： 开");
+        // ElMessage.success("绘制管道： 开");
       },
       null,
       () => {
-        // console.log("Quit draw line mode");
+        // console.debug("Quit draw line mode");
         currentSelectedFacilityId.value = -1;
         appRuntime.drawLinePreviewLine.hide();
         drawLineStartPos = null;
@@ -210,20 +213,20 @@ function onMapReady() {
         appRuntime.mapInstance.off("click", handleDrawPolyline);
         appStat.value.addFacilityContinuously = false;
         restoreClickThrough();
-        ElMessage.warning("绘制管道：关");
+        // ElMessage.warning("绘制管道：关");
       },
     )
     // 绘制设施模式
     .addState(
       DRAW_FACILITY_MODE,
       () => {
-        // console.log("Enter draw facility mode");
+        // console.debug("Enter draw facility mode");
         appRuntime.mapInstance.on("click", handleDrawFacility);
         openClickThrough();
       },
       null,
       () => {
-        // console.log("Quit draw facility mode");
+        // console.debug("Quit draw facility mode");
         currentSelectedFacilityId.value = -1;
         appRuntime.mapInstance.off("click", handleDrawFacility);
         appStat.value.addFacilityContinuously = false;
@@ -234,7 +237,7 @@ function onMapReady() {
     .addState(
       EDIT_EXT_DATA_MODE,
       (_prevState, _ctx, target) => {
-        // console.log("Enter edit mode");
+        // console.debug("Enter edit mode");
 
         currentSelectObj = target;
         // console.debug(currentSelectObj);
@@ -254,13 +257,13 @@ function onMapReady() {
         currentObjData.value = currentSelectObj.getExtData();
       },
       (_prevState, target) => {
-        // console.log("Run edit mode");
+        // console.debug("Run edit mode");
 
         currentSelectObj = target;
         currentObjData.value = currentSelectObj.getExtData();
       },
       () => {
-        // console.log("Quit edit mode");
+        // console.debug("Quit edit mode");
 
         if (!currentSelectObj) {
           return;
@@ -493,7 +496,7 @@ function handleSelectedFacilityIdChanged(newId, doubleClicked) {
   if (newId < 1) {
     return;
   }
-  // console.log(newId, doubleClicked);
+  // console.debug(newId, doubleClicked);
 
   // id为1的是管道
   if (newId === 1) {
@@ -530,13 +533,54 @@ function handleDeleteCurObj() {
 </script>
 
 <template>
-  <ToolBar></ToolBar>
+  <Header></Header>
 
   <div class="content">
-    <FacilityList
-      :currentSelectedId="currentSelectedFacilityId"
-      v-on:selectedIdChanged="handleSelectedFacilityIdChanged"
-    ></FacilityList>
+    <div class="tab">
+      <TabGroup>
+        <TabList class="tab__list tab__list--padding">
+          <Tab as="template" v-slot="{ selected }">
+            <div
+              :class="{
+                tab__item: true,
+                'tab__item--active': selected,
+              }"
+            >
+              <span
+                class="iconfont icon-layers-1--design-layer-layers-pile-stack-align"
+              ></span>
+              <span class="tab__item-label">组件</span>
+            </div>
+          </Tab>
+
+          <Tab as="template" v-slot="{ selected }">
+            <div
+              :class="{
+                tab__item: true,
+                'tab__item--active': selected,
+              }"
+            >
+              <span class="iconfont icon-database"></span>
+              <span class="tab__item-label">数据库</span>
+            </div>
+          </Tab>
+        </TabList>
+
+        <TabPanels class="tab__panels">
+          <TabPanel class="tab__panel">
+            <FacilityList
+              class="facility-list-panel"
+              :currentSelectedId="currentSelectedFacilityId"
+              v-on:selectedIdChanged="handleSelectedFacilityIdChanged"
+            ></FacilityList>
+          </TabPanel>
+
+          <TabPanel class="tab__panel">
+            <DatabasePanel class="database-panel"></DatabasePanel>
+          </TabPanel>
+        </TabPanels>
+      </TabGroup>
+    </div>
 
     <GaoDeMap @mapLoaded="onMapReady"></GaoDeMap>
 
@@ -564,7 +608,72 @@ function handleDeleteCurObj() {
 
 .content {
   position: relative;
-  flex: 1;
   display: flex;
+  flex: 1;
+}
+
+.tab {
+  width: fit-content;
+  height: 100%;
+  display: flex;
+}
+
+.tab__list {
+  width: fit-content;
+  height: 100%;
+  border-right: 1px solid rgba(117, 117, 117, 0.2);
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tab__list--padding {
+  padding: 12px 8px;
+}
+
+.tab__item {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  cursor: pointer;
+}
+.tab__item:not(.tab__item--active):hover {
+  background-color: rgba(72, 72, 72, 0.1);
+}
+
+.tab__item--active {
+  background-color: rgba(0, 0, 0, 0.15);
+}
+
+.tab__item-label {
+  font-size: 12px;
+}
+
+.tab__panels {
+  width: fit-content;
+  height: 100%;
+}
+
+.tab__panel {
+  height: 100%;
+}
+
+.facility-list-panel {
+  width: 260px;
+  height: 100%;
+  border-right: 1px solid rgba(117, 117, 117, 0.2);
+}
+
+.database-panel {
+  width: 260px;
+  height: 100%;
+  border-right: 1px solid rgba(117, 117, 117, 0.2);
 }
 </style>

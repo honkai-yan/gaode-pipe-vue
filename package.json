@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@dnd-kit/vue": "^0.4.0",
+    "@headlessui/vue": "^1.7.23",
     "@tailwindcss/vite": "^4.2.4",
     "element-plus": "^2.14.0",
     "pinia": "^3.0.4",

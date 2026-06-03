@@ -69,8 +69,8 @@ onMounted(() => {
       appRuntime.drawLinePreviewLine = previewLine;
       previewLine.hide();
 
-      console.log("地图加载成功");
-      // console.log(appStat.value.mapInstanceLoadStat);
+      console.debug("地图加载成功");
+      // console.debug(appStat.value.mapInstanceLoadStat);
       appStat.value.mapInstanceLoadStat = "done";
       loading.close();
       emit("mapLoaded");

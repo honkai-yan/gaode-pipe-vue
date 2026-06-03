@@ -1,6 +1,5 @@
 <script setup>
 import { presetComDataKeys } from "@/data/componentDataKeys";
-import { ElMessageBox } from "element-plus";
 
 /**
 {
@@ -18,7 +17,7 @@ const props = defineProps({
 });
 
 function handleAddData() {
-  // console.log(props.data);
+  // console.debug(props.data);
   props.data.extData.push({
     key: "",
     value: "",
@@ -26,7 +25,7 @@ function handleAddData() {
 }
 
 function handleDeleteData(idx) {
-  // console.log(idx);
+  // console.debug(idx);
   props.data.extData.splice(idx, 1);
 }
 

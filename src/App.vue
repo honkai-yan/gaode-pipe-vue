@@ -150,7 +150,7 @@ const enterDrawPipeMode = () => {
   operateState.value.drawLineMode = true;
   updateMapCursor();
   resetAllPipeLineStyles();
-  console.log("绘制模式");
+  console.debug("绘制模式");
   updatePreviewLine();
 };
 
@@ -159,7 +159,7 @@ const exitDrawPipeMode = () => {
 
   operateState.value.drawLineMode = false;
   updateMapCursor();
-  console.log("普通模式");
+  console.debug("普通模式");
 
   hoverPos = [-1, -1];
   drawLineStartPos = [-1, -1];
@@ -361,7 +361,7 @@ const exportPipeLines = () => {
   }
 
   downloadExportPayload(payload);
-  console.log("导出线段数据", payload);
+  console.debug("导出线段数据", payload);
 };
 
 const toPlainPixel = (pixel) => {
